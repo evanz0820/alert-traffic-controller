@@ -2,6 +2,8 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 BACKEND := backend
 FRONTEND := frontend
+# Import from src directly; editable-install .pth files can be skipped when macOS marks .venv hidden.
+export PYTHONPATH := src
 
 .PHONY: help setup dev api web test test-backend test-frontend lint format seed screenshots clean
 

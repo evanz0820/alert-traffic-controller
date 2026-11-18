@@ -46,11 +46,12 @@ warn_unused_configs = true
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["atc.engine", "atc.engine.*", "atc.directory", "atc.directory.*", "atc.config"]
+module = ["atc.engine", "atc.engine.*", "atc.directory", "atc.directory.*", "atc.config", "atc.domain"]
 strict = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-q"
 filterwarnings = [
     # Starlette recommends httpx2 for TestClient; httpx still works and is pinned for now.
