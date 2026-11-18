@@ -24,7 +24,9 @@ def next_local_time(at: datetime, tz: ZoneInfo, target: time) -> datetime:
             instant = candidate.astimezone(UTC)
             if instant >= at:
                 return instant
-    raise AssertionError("unreachable: a wall-clock time recurs within two days")  # pragma: no cover
+    raise AssertionError(
+        "unreachable: a wall-clock time recurs within two days"
+    )  # pragma: no cover
 
 
 def format_local(at: datetime, tz: ZoneInfo) -> str:
