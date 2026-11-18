@@ -87,7 +87,7 @@ export function Shell() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div className="min-h-dvh bg-night">
+    <div className="min-h-dvh bg-night lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
       <a
         href="#main"
         className="sr-only z-50 rounded-md bg-deck px-3 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
@@ -95,17 +95,19 @@ export function Shell() {
         Skip to content
       </a>
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-rim bg-deck px-4 py-5 lg:flex">
-        <Wordmark className="px-2" />
-        <div className="mt-8">
-          <NavLinks />
-        </div>
-        <div className="mt-auto space-y-4">
-          <SearchButton onClick={() => palette.setOpen(true)} />
-          <RunPicker />
-          <div className="flex items-center justify-between border-t border-rim pt-4 text-xs text-ink-faint">
-            <span>Synthetic data, seed 42</span>
-            <ThemeButton className="-mr-2" />
+      <aside className="hidden border-r border-rim bg-deck lg:block">
+        <div className="sticky top-0 flex h-dvh flex-col px-4 py-5">
+          <Wordmark className="px-2" />
+          <div className="mt-8">
+            <NavLinks />
+          </div>
+          <div className="mt-auto space-y-4">
+            <SearchButton onClick={() => palette.setOpen(true)} />
+            <RunPicker />
+            <div className="flex items-center justify-between border-t border-rim pt-4 text-xs text-ink-faint">
+              <span>Synthetic data, seed 42</span>
+              <ThemeButton className="-mr-2" />
+            </div>
           </div>
         </div>
       </aside>
@@ -147,7 +149,7 @@ export function Shell() {
         </SheetContent>
       </Sheet>
 
-      <main id="main" className="lg:pl-[232px]">
+      <main id="main" className="min-w-0">
         <div className="mx-auto w-full max-w-[1280px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div

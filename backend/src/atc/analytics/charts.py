@@ -97,9 +97,12 @@ def timeseries(session: Session, run: SimRun) -> list[DayPoint]:
     base_times = session.exec(
         select(AlertDecision.delivered_at).where(AlertDecision.run_id == run.baseline_run_id)
     ).all()
-    days = sorted({_bank_day(t) for t in base_times if t is not None})
-    if not days:
+    delivered = [t for t in base_times if t is not None]
+    if not delivered:
         return []
+    # The dataset starts at midnight UTC, i.e. mid-evening Eastern; skip that partial day.
+    first_full_day = min(delivered).date()
+    days = sorted({d for t in delivered if (d := _bank_day(t)) >= first_full_day})
     span = [days[0] + timedelta(days=i) for i in range((days[-1] - days[0]).days + 1)]
     baseline = dict.fromkeys(span, 0)
     atc = dict.fromkeys(span, 0)
