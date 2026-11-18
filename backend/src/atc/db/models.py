@@ -59,6 +59,7 @@ class SimRun(SQLModel, table=True):
     config: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime
     duration_ms: int = 0
+    headline: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
 
 
 class AlertDecision(SQLModel, table=True):
@@ -97,7 +98,8 @@ class CustomerRunStat(SQLModel, table=True):
 
     run_id: str = Field(foreign_key="sim_run.id", primary_key=True)
     customer_id: int = Field(foreign_key="customer.id", primary_key=True)
-    fatigue_score_end: float
+    fatigue_score_mean: float
     fatigue_score_peak: float
+    fatigue_score_end: float
     alerts_delivered: int
     marketing_paused: bool
