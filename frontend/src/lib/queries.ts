@@ -7,6 +7,16 @@ export function useRuns() {
   return useQuery({ queryKey: ['runs'], queryFn: () => api.runs(20) })
 }
 
+/** Summary for a specific run id; nothing is fetched while the id is unknown. */
+export function useRunSummary(id: string | undefined) {
+  return useQuery({
+    queryKey: ['summary', id],
+    queryFn: () => api.summary(id!),
+    enabled: !!id,
+    staleTime: Infinity,
+  })
+}
+
 export function useSummary(runId?: string) {
   const current = useRun().runId
   const id = runId ?? current
