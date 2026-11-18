@@ -1,3 +1,11 @@
+import { RouterProvider } from 'react-router'
+import { Providers } from '@/app/providers'
+import { router } from '@/app/router'
+
 export default function App() {
-  return <main className="p-8 text-2xl">Northgate Bank · ATC</main>
+  return (
+    <Providers>
+      <RouterProvider router={router} />
+    </Providers>
+  )
 }

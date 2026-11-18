@@ -5,7 +5,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'scripts/out'] },
+  { ignores: ['dist', 'node_modules', 'scripts'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
@@ -24,8 +24,8 @@ export default tseslint.config(
     },
   },
   {
-    // shadcn-generated primitives export variants alongside components
-    files: ['src/components/ui/**/*.{ts,tsx}'],
+    // shadcn primitives, context providers + hooks, and the route table mix exports by design
+    files: ['src/components/ui/**/*.{ts,tsx}', 'src/lib/*.tsx', 'src/app/router.tsx'],
     rules: { 'react-refresh/only-export-components': 'off' },
   },
 )
