@@ -8,6 +8,11 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
+  // Pre-bundle deps used only by lazy routes so Vite doesn't re-optimize mid-session
+  // (which can load two copies of React until the page reloads).
+  optimizeDeps: {
+    include: ['@tanstack/react-table', 'recharts', 'motion/react', 'radix-ui', 'cmdk'],
+  },
   server: {
     proxy: {
       '/api': {
