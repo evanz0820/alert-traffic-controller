@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from 'react'
 
 type Theme = 'dark' | 'light'
 const KEY = 'atc-theme'
@@ -16,7 +23,8 @@ const ThemeContext = createContext<{ theme: Theme; toggle: () => void } | null>(
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(readStored)
 
-  useEffect(() => {
+  // Layout effect: the class must flip before child effects (e.g. the canvas) read colors.
+  useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     try {
       localStorage.setItem(KEY, theme)

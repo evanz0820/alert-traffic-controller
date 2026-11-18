@@ -43,6 +43,14 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+def _require_all_keys[K: StrEnum, V](value: dict[K, V], keys: type[K], field: str) -> dict[K, V]:
+    """YAML replaces whole maps, so a partial map would silently drop entries."""
+    missing = [k.value for k in keys if k not in value]
+    if missing:
+        raise ValueError(f"{field} must list every key; missing {missing}")
+    return value
+
+
 class RuleToggle(_Model):
     enabled: bool = True
 
@@ -51,9 +59,15 @@ class CriticalBypassConfig(_Model):
     """Not toggleable: critical alerts are always delivered. Latencies drive the simulated
     dispatch time per channel (seconds)."""
 
-    latency_seconds: dict[Channel, float] = Field(
+    # Bounded so a config can never make "instant" critical delivery take minutes.
+    latency_seconds: dict[Channel, Annotated[float, Field(gt=0, le=10)]] = Field(
         default_factory=lambda: {Channel.SMS: 0.9, Channel.PUSH: 1.2, Channel.EMAIL: 2.8}
     )
+
+    @field_validator("latency_seconds")
+    @classmethod
+    def _all_channels(cls, value: dict[Channel, float]) -> dict[Channel, float]:
+        return _require_all_keys(value, Channel, "latency_seconds")
 
 
 class DedupConfig(RuleToggle):
@@ -61,7 +75,16 @@ class DedupConfig(RuleToggle):
 
 
 class PreferenceFilterConfig(RuleToggle):
-    fallback_order: tuple[Channel, ...] = (Channel.PUSH, Channel.EMAIL, Channel.SMS)
+    fallback_order: tuple[Channel, ...] = Field(
+        default=(Channel.PUSH, Channel.EMAIL, Channel.SMS), min_length=1
+    )
+
+    @field_validator("fallback_order")
+    @classmethod
+    def _unique(cls, value: tuple[Channel, ...]) -> tuple[Channel, ...]:
+        if len(set(value)) != len(value):
+            raise ValueError("fallback_order must not repeat a channel")
+        return value
 
 
 class FatigueGateConfig(RuleToggle):
@@ -78,6 +101,16 @@ class FatigueGateConfig(RuleToggle):
         }
     )
     night_multiplier: Annotated[float, Field(ge=1)] = 1.5
+
+    @field_validator("weights")
+    @classmethod
+    def _weights(cls, value: dict[Priority, float]) -> dict[Priority, float]:
+        _require_all_keys(value, Priority, "weights")
+        if value[Priority.CRITICAL] != 0:
+            raise ValueError("critical alerts must have fatigue weight 0")
+        if any(w < 0 for w in value.values()):
+            raise ValueError("fatigue weights must be non-negative")
+        return value
 
 
 class QuietHoursConfig(RuleToggle):
@@ -122,6 +155,11 @@ class ChannelRoutingConfig(RuleToggle):
             Engagement.LOW: 0.25,
         }
     )
+
+    @field_validator("open_probability")
+    @classmethod
+    def _all_levels(cls, value: dict[Engagement, float]) -> dict[Engagement, float]:
+        return _require_all_keys(value, Engagement, "open_probability")
 
 
 class RulesSettings(_Model):
@@ -193,4 +231,7 @@ def save_config(config: RulesConfig, path: Path | None = None) -> None:
         "# critical_bypass is always first and cannot be disabled.\n"
     )
     body = yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False)
-    target.write_text(header + body)
+    # Write-then-rename so concurrent readers never see a half-written file.
+    tmp = target.with_name(f".{target.name}.tmp")
+    tmp.write_text(header + body)
+    os.replace(tmp, target)

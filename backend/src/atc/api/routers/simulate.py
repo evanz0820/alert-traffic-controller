@@ -1,3 +1,4 @@
+import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
 
@@ -13,7 +14,11 @@ router = APIRouter(tags=["simulation"])
 def simulate(body: SimulateRequest, session: SessionDep) -> SimulateResponse:
     """Run the controller over the stored 30-day dataset with optional config overrides."""
     try:
-        config = load_config().with_overrides(body.overrides)
+        base = load_config()
+    except (ValidationError, yaml.YAMLError) as exc:
+        raise HTTPException(500, f"rules.yaml is invalid: {exc}") from exc
+    try:
+        config = base.with_overrides(body.overrides)
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False)) from exc
     run = execute_run(session, config, label=body.label)

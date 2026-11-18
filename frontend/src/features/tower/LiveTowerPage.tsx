@@ -72,6 +72,7 @@ function Stage({ replay }: { replay: Replay }) {
   const [view, setView] = useState({ simTime: 0, counts: sim.counts })
   const [ticks, setTicks] = useState<Tick[]>([])
   const [stageWidth, setStageWidth] = useState(1000)
+  const [failure, setFailure] = useState<string | null>(null)
   const pending = useRef<number[]>([])
 
   const controls = useRef({ playing, speed })
@@ -85,7 +86,10 @@ function Stage({ replay }: { replay: Replay }) {
     const wrap = wrapRef.current
     if (!canvas || !wrap) return
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {
+      setFailure('This browser could not start the canvas renderer.')
+      return
+    }
     const palette = readPalette(document.documentElement)
     let w = 0
     let h = 0
@@ -107,6 +111,17 @@ function Stage({ replay }: { replay: Replay }) {
     let last = performance.now()
     let lastPublish = 0
     const loop = (ms: number) => {
+      try {
+        step(ms)
+      } catch (error) {
+        // Stop cleanly and say so, rather than freezing silently on a bad frame.
+        setPlaying(false)
+        setFailure(error instanceof Error ? error.message : 'The replay stopped unexpectedly.')
+        return
+      }
+      frame = requestAnimationFrame(loop)
+    }
+    const step = (ms: number) => {
       const now = ms / 1000
       const dt = Math.min(0.1, (ms - last) / 1000)
       last = ms
@@ -138,7 +153,6 @@ function Stage({ replay }: { replay: Replay }) {
           })
         }
       }
-      frame = requestAnimationFrame(loop)
     }
     frame = requestAnimationFrame(loop)
     return () => {
@@ -155,6 +169,9 @@ function Stage({ replay }: { replay: Replay }) {
   }
 
   const decided = LANES.reduce((sum, lane) => sum + view.counts[lane], 0)
+  if (failure) {
+    return <ErrorState title="The replay couldn't run." error={new Error(failure)} />
+  }
   const finished = view.simTime >= sim.duration
 
   return (

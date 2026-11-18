@@ -64,7 +64,9 @@ export default function OverviewPage() {
             : 'Each bar is one rule: how many alerts it decided, split by the outcome it gave them.'
         }
       >
-        {flows.data ? (
+        {flows.isError ? (
+          <ErrorState error={flows.error} onRetry={() => flows.refetch()} />
+        ) : flows.data ? (
           <figure>
             {wide ? <FlowSankey data={flows.data} /> : <FlowBars data={flows.data} />}
             <figcaption className="mt-5 max-w-[80ch] space-y-1 border-t border-rim pt-4 text-sm text-ink-muted">
@@ -85,7 +87,9 @@ export default function OverviewPage() {
           title="Daily alerts delivered"
           description="Dashed grey is without ATC; teal is with ATC; red is critical alerts, which never change."
         >
-          {series.data ? (
+          {series.isError ? (
+            <ErrorState error={series.error} onRetry={() => series.refetch()} />
+          ) : series.data ? (
             <figure className="flex min-h-[280px] flex-1 flex-col">
               <VolumeChart data={series.data} />
               <figcaption className="sr-only">

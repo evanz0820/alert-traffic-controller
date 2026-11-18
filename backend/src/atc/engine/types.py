@@ -9,7 +9,7 @@ from typing import ClassVar, Protocol
 from zoneinfo import ZoneInfo
 
 from atc.config import RuleName, RulesConfig
-from atc.domain import Channel, Engagement, EventType, Outcome, Priority
+from atc.domain import Channel, Engagement, EventType, Outcome, Priority, priority_of
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +24,18 @@ class AlertRequest:
     requested_channel: Channel
     requested_at: datetime  # tz-aware UTC
     amount: float | None = None
+
+    def __post_init__(self) -> None:
+        # Priority is a function of event type. A mismatch would let a fraud alert skip the
+        # critical bypass, so it is rejected at construction.
+        expected = priority_of(self.event_type)
+        if self.priority is not expected:
+            raise ValueError(
+                f"{self.alert_id}: {self.event_type} must have priority {expected}, "
+                f"got {self.priority}"
+            )
+        if self.requested_at.tzinfo is None:
+            raise ValueError(f"{self.alert_id}: requested_at must be timezone-aware")
 
 
 @dataclass(frozen=True, slots=True)

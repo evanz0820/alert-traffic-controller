@@ -1,6 +1,6 @@
 """Quiet hours across time zones and the Nov 1, 2026 fall-back DST boundary."""
 
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -122,3 +122,22 @@ def test_digest_time_respects_dst() -> None:
     after = next_local_time(datetime(2026, 11, 2, 12, tzinfo=UTC), tz, time(18, 0))
     assert before.hour == 22  # 6 PM EDT
     assert after.hour == 23  # 6 PM EST
+
+
+@pytest.mark.parametrize("target", [time(1, 0), time(1, 30), time(1, 59), time(2, 30)])
+@pytest.mark.parametrize("zone", ["America/Chicago", "America/New_York", "America/Los_Angeles"])
+def test_targets_in_the_repeated_hour_are_never_in_the_past(target: time, zone: str) -> None:
+    tz = ZoneInfo(zone)
+    start = datetime(2026, 11, 1, 4, 0, tzinfo=UTC)
+    for minutes in range(0, 6 * 60, 7):
+        at = start + timedelta(minutes=minutes)
+        release = next_local_time(at, tz, target)
+        assert release >= at
+        assert release.astimezone(tz).time() == target
+        assert release - at < timedelta(hours=26)
+
+
+def test_second_pass_of_repeated_hour_returns_the_later_instant() -> None:
+    tz = ZoneInfo("America/Chicago")
+    at = datetime(2026, 11, 1, 7, 15, tzinfo=UTC)  # 1:15 AM CST, after 1:30 AM CDT passed
+    assert next_local_time(at, tz, time(1, 30)) == datetime(2026, 11, 1, 7, 30, tzinfo=UTC)

@@ -160,7 +160,11 @@ export default function CustomersPage() {
                     <span className="text-ink-muted max-md:hidden">{zoneLabel(c.timezone)}</span>
                     <span className="text-ink-muted capitalize max-md:hidden">{c.engagement}</span>
                     <span className="max-md:row-span-2 max-md:self-center">
-                      <FatigueCell before={c.fatigue_baseline ?? 0} after={c.fatigue_atc ?? 0} />
+                      {c.fatigue_baseline === null || c.fatigue_atc === null ? (
+                        <span className="text-xs text-ink-faint">No data</span>
+                      ) : (
+                        <FatigueCell before={c.fatigue_baseline} after={c.fatigue_atc} />
+                      )}
                     </span>
                     <span className="text-xs text-ink-faint md:hidden">
                       {SEGMENT_LABEL[c.segment]}, {zoneLabel(c.timezone)}

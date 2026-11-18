@@ -5,7 +5,15 @@ import {
   useReactTable,
   type PaginationState,
 } from '@tanstack/react-table'
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  LoaderCircle,
+  X,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { OutcomeBadge, PriorityDot, RuleBadge } from '@/components/shared/OutcomeBadge'
@@ -20,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/lib/api'
+import { api, errorFrom } from '@/lib/api'
 import {
   EVENT_LABEL,
   fmtDateTime,
@@ -117,6 +125,30 @@ export default function AlertLogPage() {
     desc ? '-requested_at' : 'requested_at',
   )
 
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+
+  /** Fetch first so a server error is shown instead of being saved as a ".csv" file. */
+  const exportCsv = async (id: string) => {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const res = await fetch(api.alertsCsvUrl(id, filters))
+      if (!res.ok) throw await errorFrom(res)
+      const url = URL.createObjectURL(await res.blob())
+      const link = Object.assign(document.createElement('a'), {
+        href: url,
+        download: `atc-alerts-${id}.csv`,
+      })
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'unknown error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const update = (patch: Partial<AlertFilters>) => {
     setFilters((f) => ({ ...f, ...patch }))
     setPagination((p) => ({ ...p, pageIndex: 0 }))
@@ -148,11 +180,17 @@ export default function AlertLogPage() {
         description="Every decision the controller made, with the rule that made it and why. Filter, page through, or export what you see."
         actions={
           runId && (
-            <Button variant="outline" asChild>
-              <a href={api.alertsCsvUrl(runId, filters)} download>
-                <Download /> Export CSV
-              </a>
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button variant="outline" onClick={() => exportCsv(runId)} disabled={exporting}>
+                {exporting ? <LoaderCircle className="animate-spin" /> : <Download />}
+                Export CSV
+              </Button>
+              {exportError && (
+                <p role="alert" className="text-xs text-delayed">
+                  Export failed: {exportError}
+                </p>
+              )}
+            </div>
           )
         }
       />

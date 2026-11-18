@@ -9,6 +9,7 @@ from typing import ClassVar
 
 from atc.config import RuleName, RulesConfig
 from atc.domain import Priority
+from atc.engine.rules.digest import digest_channel
 from atc.engine.timeutil import format_clock, next_local_time
 from atc.engine.types import AlertRequest, CustomerContext, Decision
 
@@ -61,7 +62,7 @@ class FrequencyCap:
         if req.priority is Priority.MARKETING:
             return decision.suppress(self.name, f"Dropped: {over}. Marketing is cut first.")
         digest = config.rules.digest
-        if digest.enabled:
+        if digest.enabled and digest_channel(ctx.profile, config) is not None:
             deliver_at = next_local_time(at, tz, digest.send_at)
             return decision.batch(
                 self.name,

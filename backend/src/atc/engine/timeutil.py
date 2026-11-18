@@ -16,10 +16,15 @@ def in_window(t: time, start: time, end: time) -> bool:
 def next_local_time(at: datetime, tz: ZoneInfo, target: time) -> datetime:
     """The first instant at or after `at` whose local wall-clock time is `target`, in UTC."""
     local = at.astimezone(tz)
-    day = local.date()
-    if local.time().replace(tzinfo=None) > target:
-        day += timedelta(days=1)
-    return datetime.combine(day, target, tzinfo=tz).astimezone(UTC)
+    for offset in (0, 1):
+        day = local.date() + timedelta(days=offset)
+        # A wall-clock time can occur twice on a fall-back day (fold 0 then fold 1).
+        for fold in (0, 1):
+            candidate = datetime.combine(day, target, tzinfo=tz).replace(fold=fold)
+            instant = candidate.astimezone(UTC)
+            if instant >= at:
+                return instant
+    raise AssertionError("unreachable: a wall-clock time recurs within two days")  # pragma: no cover
 
 
 def format_local(at: datetime, tz: ZoneInfo) -> str:

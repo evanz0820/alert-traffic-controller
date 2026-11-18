@@ -12,9 +12,10 @@ from datetime import UTC, datetime, time, timedelta
 from types import MappingProxyType
 
 from atc.config import RuleName, RulesConfig
-from atc.domain import Channel, Outcome, Priority
+from atc.domain import Channel, Outcome, Priority, priority_of
 from atc.engine.fatigue import fatigue_score
 from atc.engine.rules import RULES
+from atc.engine.rules.digest import digest_channel
 from atc.engine.timeutil import stable_unit
 from atc.engine.types import (
     AlertRequest,
@@ -91,26 +92,30 @@ def evaluate(
             decision = rule.apply(req, decision, ctx, config)
     if not decision.channels and decision.channel is not None:
         decision = replace(decision, channels=(decision.channel,))
-    _guard_critical(req, decision)
+    _guard_critical(req, decision, ctx.profile)
     return decision
 
 
-def _guard_critical(req: AlertRequest, decision: Decision) -> None:
-    if req.priority is not Priority.CRITICAL:
+def _guard_critical(req: AlertRequest, decision: Decision, profile: CustomerProfile) -> None:
+    """Defence in depth: a critical alert must be SENT, at once, on SMS plus every enabled
+    channel. Keyed on the event type itself, not on any field a caller could set."""
+    if priority_of(req.event_type) is not Priority.CRITICAL:
         return
+    expected = profile.enabled_channels | {Channel.SMS}
     if (
         decision.outcome is not Outcome.SENT
         or decision.scheduled_at != req.requested_at
-        or Channel.SMS not in decision.channels
+        or set(decision.channels) != expected
     ):
         raise CriticalGuaranteeError(
-            f"critical alert {req.alert_id} was not sent instantly: {decision.outcome}"
+            f"critical alert {req.alert_id} was not sent instantly on every channel: "
+            f"{decision.outcome} via {decision.channels}"
         )
 
 
 def dispatch_latency(channel: Channel, alert_id: str, config: RulesConfig) -> timedelta:
     """Simulated provider latency: per-channel base with deterministic jitter (0.8x-1.4x)."""
-    base = config.rules.critical_bypass.latency_seconds.get(channel, 2.0)
+    base = config.rules.critical_bypass.latency_seconds[channel]
     return timedelta(seconds=round(base * (0.8 + 0.6 * stable_unit(alert_id, channel)), 3))
 
 
@@ -154,9 +159,8 @@ def run_controller(
         elif decision.outcome is Outcome.BATCHED_TO_DIGEST:
             digest_index = ledger.digests.get(decision.scheduled_at)
             if digest_index is None:
-                channel = (
-                    Channel.EMAIL if Channel.EMAIL in profile.enabled_channels else (Channel.PUSH)
-                )
+                channel = digest_channel(profile, config)
+                assert channel is not None, "digest rules only batch reachable customers"
                 digest_index = len(digests)
                 ledger.digests[decision.scheduled_at] = digest_index
                 digests.append(DigestRecord(req.customer_id, decision.scheduled_at, channel))

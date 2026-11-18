@@ -49,8 +49,15 @@ await page.keyboard.press('Tab')
 const skip = await page.evaluate(() => document.activeElement?.textContent)
 check(skip?.includes('Skip to content'), 'first Tab focuses the skip link')
 await page.keyboard.press('Tab')
-const outline = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle)
-check(outline !== 'none', 'focused element shows a visible focus ring')
+const ring = await page.evaluate(() => {
+  const css = getComputedStyle(document.activeElement)
+  const outline =
+    css.outlineStyle !== 'none' &&
+    parseFloat(css.outlineWidth) > 0 &&
+    !css.outlineColor.includes('0)')
+  return outline || (css.boxShadow !== 'none' && css.boxShadow !== '')
+})
+check(ring, 'focused element shows a visible focus ring')
 
 // Headless Chromium on macOS swallows Meta+K; the handler accepts Ctrl+K too.
 await page.keyboard.press('Control+k')
@@ -59,7 +66,10 @@ await page.keyboard.press('Enter')
 await page.waitForURL(/customers\?id=/)
 await page.getByRole('dialog').waitFor()
 await page.waitForTimeout(600) // let the sheet finish opening before dismissing it
-check(true, 'Cmd+K finds a customer and opens their sheet')
+check(
+  await page.getByRole('dialog').getByText('Abigail').first().isVisible(),
+  'Cmd+K finds a customer and opens their sheet',
+)
 await page.keyboard.press('Escape')
 await page.waitForTimeout(600)
 check(!/id=/.test(page.url()), 'Escape closes the sheet and clears ?id=')
@@ -79,33 +89,47 @@ await page
 
 await page.goto(BASE + '/log', { waitUntil: 'networkidle' })
 await page.getByRole('button', { name: /^Outcome/ }).click()
+const filtered = page.waitForResponse(
+  (r) => r.url().includes('/alerts?') && r.url().includes('outcome=SUPPRESSED'),
+)
 await page.getByRole('menuitemcheckbox', { name: 'Suppressed' }).click()
 await page.keyboard.press('Escape')
-await page.waitForTimeout(600)
-const badges = await page.locator('tbody tr', { hasText: 'Suppressed' }).count()
-const rows = await page.locator('tbody tr').count()
+await filtered
+await page.waitForTimeout(200)
+// Column 5 is the outcome badge; reason text may mention "suppressed" in other rows.
+const outcomes = await page.locator('tbody tr td:nth-child(5)').allInnerTexts()
+const rows = outcomes.length
+const badges = outcomes.filter((t) => t.includes('Suppressed')).length
 check(rows > 0 && badges === rows, `outcome filter shows only suppressed rows (${badges}/${rows})`)
 
 await page.goto(BASE + '/rules', { waitUntil: 'networkidle' })
+// Note: this persists a new run in the dev database; reseed (make seed) before screenshots.
 await page.getByRole('slider', { name: 'Alerts per day' }).focus()
-await page.keyboard.press('ArrowRight')
+await page.keyboard.press('ArrowLeft')
+const simulated = page.waitForResponse((r) => r.url().includes('/simulate'))
 await page.getByRole('button', { name: 'Run simulation' }).first().click()
-const sim = await page.waitForResponse((r) => r.url().includes('/simulate'))
+const sim = await simulated
 check(sim.status() === 201, 'Run simulation creates a new run')
-await page.waitForTimeout(1500)
-check(
-  (await page.getByText('This run against the one before').count()) === 1,
-  'comparison panel renders',
-)
+// The panel goes old table -> skeleton -> new table, so poll rather than wait once.
+const comparison = page.locator('main aside table thead')
+let comparisonVisible = false
+for (let i = 0; i < 40 && !comparisonVisible; i++) {
+  await page.waitForTimeout(250)
+  comparisonVisible = await comparison.isVisible()
+}
+check(comparisonVisible, 'comparison table shows previous vs current run')
 
 const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } })
 const m = await mobile.newPage()
+m.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text().slice(0, 160)))
 m.on('pageerror', (e) => errors.push(e.message))
 await m.goto(BASE + '/', { waitUntil: 'networkidle' })
 await m.getByRole('button', { name: 'Open menu' }).click()
 await m.getByRole('link', { name: 'Alert Log' }).click()
 await m.waitForURL(/\/log/)
-check(true, 'mobile menu navigates')
+const heading = m.getByRole('heading', { name: 'Alert Log' })
+await heading.waitFor({ timeout: 5000 }).catch(() => {})
+check(await heading.isVisible(), 'mobile menu navigates')
 
 check(
   errors.length === 0,

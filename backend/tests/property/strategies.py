@@ -111,9 +111,10 @@ def configs(draw: st.DrawFn) -> RulesConfig:
             "quiet_hours": {
                 **toggles["quiet_hours"],
                 "start": f"{draw(st.integers(18, 23)):02d}:00",
-                "end": f"{draw(st.integers(5, 9)):02d}:00",
+                # Any end hour, including the repeated 1 AM hour on the fall-back night.
+                "end": f"{draw(st.integers(0, 9)):02d}:{draw(st.sampled_from(['00', '30']))}",
             },
-            "digest": {**toggles["digest"], "send_at": f"{draw(st.integers(6, 21)):02d}:30"},
+            "digest": {**toggles["digest"], "send_at": f"{draw(st.integers(0, 23)):02d}:30"},
         },
     }
     return RulesConfig().with_overrides(overrides)

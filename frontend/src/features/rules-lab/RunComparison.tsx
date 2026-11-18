@@ -1,3 +1,4 @@
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Panel } from '@/components/shared/Panel'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fmtInt } from '@/lib/format'
@@ -68,6 +69,8 @@ export function RunComparison({
         <p className="text-sm text-ink-muted">
           There's only one run so far. Change a rule and run the simulation to see the difference.
         </p>
+      ) : previous.isError || current.isError ? (
+        <ErrorState error={previous.error ?? current.error} />
       ) : !previous.data || !current.data ? (
         <Skeleton className="h-64 w-full" />
       ) : (

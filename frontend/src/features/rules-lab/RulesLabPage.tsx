@@ -127,6 +127,15 @@ export default function RulesLabPage() {
   })
 
   if (runs.isError) return <ErrorState error={runs.error} onRetry={() => runs.refetch()} />
+  if (summary.isError) return <ErrorState error={summary.error} onRetry={() => summary.refetch()} />
+  if (runs.data && runId && !base) {
+    return (
+      <ErrorState
+        title="The selected run is no longer available."
+        error={new Error('Pick another run from the sidebar')}
+      />
+    )
+  }
   if (!draft || !summary.data) {
     return (
       <div aria-busy="true" aria-label="Loading rules">
@@ -396,9 +405,15 @@ export default function RulesLabPage() {
                 {saved ? 'Saved' : 'Save as default'}
               </Button>
             </div>
-            <p className="mt-3 text-xs text-ink-faint">
-              Saving writes these settings to rules.yaml, so new runs start from them.
-            </p>
+            {save.isError ? (
+              <p role="alert" className="mt-3 text-xs text-delayed">
+                Not saved: {(save.error as Error).message}
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-ink-faint">
+                Saving writes these settings to rules.yaml, so new runs start from them.
+              </p>
+            )}
           </div>
         </aside>
       </div>

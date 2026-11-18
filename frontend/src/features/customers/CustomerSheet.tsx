@@ -1,4 +1,5 @@
 import { Check, Minus, Phone } from 'lucide-react'
+import { ErrorState } from '@/components/shared/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import {
   Sheet,
@@ -197,7 +198,15 @@ export function CustomerSheet({ id, onClose }: { id: number | null; onClose: () 
         )}
 
         <div className="px-5 py-6 sm:px-8">
-          {timeline.data && c ? (
+          {customer.isError || timeline.isError ? (
+            <ErrorState
+              error={customer.error ?? timeline.error}
+              onRetry={() => {
+                customer.refetch()
+                timeline.refetch()
+              }}
+            />
+          ) : timeline.data && c ? (
             <Timelines timeline={timeline.data} tz={c.timezone} />
           ) : (
             <div className="space-y-3">

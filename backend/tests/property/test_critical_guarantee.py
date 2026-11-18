@@ -72,13 +72,13 @@ def test_every_request_gets_exactly_one_decision(stream: Stream, config: RulesCo
 @given(stream=streams(), config=configs())
 def test_non_critical_never_uses_a_disabled_channel(stream: Stream, config: RulesConfig) -> None:
     requests, people = stream
-    if not config.rules.preference_filter.enabled and not config.rules.channel_routing.enabled:
+    if not config.rules.preference_filter.enabled:
         return
-    for r in run_controller(requests, people, config).results:
+    result = run_controller(requests, people, config)
+    for r in result.results:
         if r.request.priority is Priority.CRITICAL or r.decision.outcome is Outcome.SUPPRESSED:
             continue
-        if r.decision.outcome is Outcome.BATCHED_TO_DIGEST:
-            continue
-        enabled = people[r.request.customer_id].enabled_channels
-        if config.rules.preference_filter.enabled and enabled:
-            assert set(r.decision.channels) <= enabled
+        if r.decision.outcome is not Outcome.BATCHED_TO_DIGEST:
+            assert set(r.decision.channels) <= people[r.request.customer_id].enabled_channels
+    for digest in result.digests:
+        assert digest.channel in people[digest.customer_id].enabled_channels

@@ -68,14 +68,14 @@ def test_guard_rejects_a_delayed_critical_alert() -> None:
         channels=(Channel.SMS,),
     )
     with pytest.raises(CriticalGuaranteeError):
-        _guard_critical(req, held)
+        _guard_critical(req, held, make_profile())
 
 
 def test_guard_rejects_critical_without_sms() -> None:
     req = make_request(event_type=EventType.CARD_LOCKED)
     no_sms = replace(Decision.initial(req), channels=(Channel.PUSH,))
     with pytest.raises(CriticalGuaranteeError):
-        _guard_critical(req, no_sms)
+        _guard_critical(req, no_sms, make_profile())
 
 
 def test_config_round_trips_through_yaml(tmp_path: Path) -> None:
@@ -88,3 +88,40 @@ def test_config_round_trips_through_yaml(tmp_path: Path) -> None:
 
 def test_missing_config_file_falls_back_to_defaults(tmp_path: Path) -> None:
     assert load_config(tmp_path / "nope.yaml") == RulesConfig()
+
+
+def test_guard_rejects_critical_missing_an_enabled_channel() -> None:
+    req = make_request(event_type=EventType.FRAUD_SUSPECTED)
+    sms_only = replace(Decision.initial(req), channels=(Channel.SMS,))
+    with pytest.raises(CriticalGuaranteeError):
+        _guard_critical(req, sms_only, make_profile())  # push and email are on
+
+
+def test_priority_must_match_event_type() -> None:
+    with pytest.raises(ValueError, match="must have priority critical"):
+        make_request(event_type=EventType.FRAUD_SUSPECTED, priority=Priority.LOW)
+
+
+def test_requested_at_must_be_timezone_aware() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        make_request(requested_at=BASE_TIME.replace(tzinfo=None))
+
+
+def test_digest_never_uses_a_disabled_channel() -> None:
+    profiles = {1: make_profile(enabled_channels=frozenset({Channel.SMS}))}
+    requests = [
+        make_request(alert_id="A-1", event_id=1, source_id="s1", event_type=EventType.DEPOSIT)
+    ]
+    result = run_controller(requests, profiles, RulesConfig())
+    assert result.digests[0].channel is Channel.SMS
+
+
+def test_unreachable_customer_is_not_batched() -> None:
+    profiles = {1: make_profile(enabled_channels=frozenset())}
+    config = RulesConfig().with_overrides({"rules": {"preference_filter": {"enabled": False}}})
+    requests = [
+        make_request(alert_id="A-1", event_id=1, source_id="s1", event_type=EventType.DEPOSIT)
+    ]
+    result = run_controller(requests, profiles, config)
+    assert result.digests == ()
+    assert result.results[0].decision.outcome is Outcome.SUPPRESSED

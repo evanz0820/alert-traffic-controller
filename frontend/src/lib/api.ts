@@ -23,21 +23,40 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  })
-  if (!res.ok) {
-    let detail = res.statusText
-    try {
-      const body = (await res.json()) as { detail?: unknown }
-      detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
-    } catch {
-      // keep statusText
-    }
-    throw new ApiError(res.status, detail)
+/** FastAPI errors are a string or a list of {loc, msg}; turn either into one readable line. */
+function describeDetail(detail: unknown): string | null {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d: { loc?: unknown[]; msg?: string }) =>
+        [d.loc?.filter((l) => l !== 'body').join('.'), d.msg].filter(Boolean).join(': '),
+      )
+      .join('; ')
   }
+  return null
+}
+
+export async function errorFrom(res: Response): Promise<ApiError> {
+  let detail = res.statusText || `HTTP ${res.status}`
+  try {
+    detail = describeDetail(((await res.json()) as { detail?: unknown }).detail) ?? detail
+  } catch {
+    // body wasn't JSON; keep the status text
+  }
+  return new ApiError(res.status, detail)
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+    })
+  } catch {
+    throw new ApiError(0, 'The ATC API is not reachable')
+  }
+  if (!res.ok) throw await errorFrom(res)
   return (await res.json()) as T
 }
 

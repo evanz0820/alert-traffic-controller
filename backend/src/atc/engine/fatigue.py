@@ -39,7 +39,7 @@ def fatigue_breakdown(
     for d in deliveries:
         if not window_start < d.at <= at:
             continue
-        weight = cfg.weights.get(d.priority, 1.0)
+        weight = cfg.weights[d.priority]
         if weight and in_window(d.at.astimezone(tz).time(), quiet.start, quiet.end):
             weight *= cfg.night_multiplier
             night += 1
