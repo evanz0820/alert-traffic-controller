@@ -1,0 +1,74 @@
+# CLAUDE.md — Alert Traffic Controller (ATC)
+
+## Purpose
+Portfolio project. A gateway ("controller") that sits in front of a retail bank's
+independent alert producers (balance, transaction, fraud, payment, statement,
+marketing) and decides, per customer, **what** to send, **when**, and on **which
+channel**. Inspired by LinkedIn's 2018 "Air Traffic Controller" post. The bank is the
+fictional **Northgate Bank**; all data is synthetic (seed 42).
+
+Headline claim the app must prove: alert volume drops sharply, customer fatigue drops,
+and **zero critical alerts are ever suppressed or delayed**.
+
+## NON-NEGOTIABLE RULE
+**Critical alerts (fraud suspected, card locked, login from new device) are never
+suppressed, delayed, capped, batched, or rerouted away from a channel.** They are sent
+immediately on every channel (see docs/PLAN.md §5). Any change touching the rules
+engine must keep `tests/property/test_critical_guarantee.py` green. Never weaken,
+skip, or `xfail` that test. If a feature seems to require touching critical
+delivery, stop and ask.
+
+## Stack
+- Backend: Python 3.12 (uv), FastAPI, Pydantic v2, SQLModel on SQLite, pytest +
+  hypothesis, ruff, mypy (strict on `atc.engine`)
+- Frontend: React 18 + TypeScript + Vite, Tailwind CSS, shadcn/ui, Recharts (+ Sankey),
+  Framer Motion, lucide-react, TanStack Query + Table, ESLint + Prettier
+- Tooling: Makefile, Docker Compose (optional), GitHub Actions CI, Claude Code hooks
+
+## Folder map
+```
+backend/
+  src/atc/
+    engine/       pure rules pipeline (no I/O, no DB, mypy strict)
+      rules/      one module per rule, shared Rule protocol
+    simulator/    synthetic customers, accounts, events (seeded)
+    directory/    account type -> customer service phone mapping
+    db/           SQLModel tables, session, repositories
+    analytics/    summary, flows (Sankey), timeseries, timelines
+    api/          FastAPI app + routers + response schemas
+    config.py     loads/validates rules.yaml
+  tests/          unit/, property/, integration/
+frontend/
+  src/
+    app/          router, providers, layout shell
+    components/   ui/ (shadcn), brand/, charts/, shared
+    features/     overview, tower, rules-lab, customers, alert-log, about
+    lib/          api client, query hooks, formatters, tokens
+rules.yaml        single source of rule config (dashboard edits write here)
+docs/PLAN.md      approved plan: data model, API contract, pipeline, wireframes
+```
+
+## Commands
+| Task | Command |
+|---|---|
+| Install everything | `make setup` |
+| Run API + web | `make dev` (API :8000, web :5173, docs at :8000/docs) |
+| Seed DB + default runs | `make seed` |
+| All tests | `make test` |
+| Lint + format check + types | `make lint` |
+| Screenshots (Playwright) | `make screenshots` |
+| Backend only | `cd backend && uv run pytest` / `uv run ruff check` / `uv run mypy` |
+| Frontend only | `cd frontend && npm run dev` / `npm run typecheck` / `npm run lint` |
+
+## Conventions
+- Engine rules are pure: `apply(request, decision, ctx) -> decision`. No clocks, no
+  randomness, no DB inside `atc.engine`. Time and state come in through arguments.
+- All times stored in UTC (`datetime` with tz). Convert to the customer's zone only
+  inside rules or the UI. Use `zoneinfo` and never fixed offsets.
+- Every decision records `decided_by_rule` and a plain-English `reason`.
+- Config comes only from `rules.yaml` → `RulesConfig` (Pydantic). No magic numbers in rules.
+- Python: ruff defaults + isort, type hints everywhere, snake_case.
+- TS: strict mode, function components, feature folders, no `any`. Colors come only from
+  design tokens (CSS variables), never hex values in components.
+- Red is reserved for critical alerts in the UI.
+- Commit after each stage (conventional commit messages).
