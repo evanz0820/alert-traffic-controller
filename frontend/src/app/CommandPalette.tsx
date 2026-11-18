@@ -1,6 +1,7 @@
 import { Moon, Sun } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -36,44 +37,47 @@ export function CommandPalette({
       title="Search"
       description="Jump to a page or find a customer by name or ID"
     >
-      <CommandInput placeholder="Search customers or pages…" />
-      <CommandList>
-        <CommandEmpty>No customer or page matches that search.</CommandEmpty>
-        <CommandGroup heading="Pages">
-          {NAV.map((item) => (
-            <CommandItem key={item.to} value={`page ${item.label}`} onSelect={() => go(item.to)}>
-              <item.icon />
-              {item.label}
-              <span className="ml-auto truncate text-xs text-ink-faint">{item.description}</span>
-            </CommandItem>
-          ))}
-          <CommandItem
-            value="toggle theme dark light"
-            onSelect={() => {
-              toggle()
-              onOpenChange(false)
-            }}
-          >
-            {theme === 'dark' ? <Sun /> : <Moon />}
-            Switch to {theme === 'dark' ? 'light' : 'dark'} mode
-          </CommandItem>
-        </CommandGroup>
-        <CommandGroup heading="Customers">
-          {customers.data?.map((c) => (
+      {/* The shadcn dialog no longer includes cmdk's root; Input and List need its context. */}
+      <Command>
+        <CommandInput placeholder="Search customers or pages…" />
+        <CommandList>
+          <CommandEmpty>No customer or page matches that search.</CommandEmpty>
+          <CommandGroup heading="Pages">
+            {NAV.map((item) => (
+              <CommandItem key={item.to} value={`page ${item.label}`} onSelect={() => go(item.to)}>
+                <item.icon />
+                {item.label}
+                <span className="ml-auto truncate text-xs text-ink-faint">{item.description}</span>
+              </CommandItem>
+            ))}
             <CommandItem
-              key={c.id}
-              value={`${c.name} #${c.id}`}
-              onSelect={() => go(`/customers?id=${c.id}`)}
+              value="toggle theme dark light"
+              onSelect={() => {
+                toggle()
+                onOpenChange(false)
+              }}
             >
-              <span className="w-10 num text-xs text-ink-faint">#{c.id}</span>
-              {c.name}
-              <span className="ml-auto text-xs text-ink-faint">
-                {SEGMENT_LABEL[c.segment]}, {zoneLabel(c.timezone)}
-              </span>
+              {theme === 'dark' ? <Sun /> : <Moon />}
+              Switch to {theme === 'dark' ? 'light' : 'dark'} mode
             </CommandItem>
-          ))}
-        </CommandGroup>
-      </CommandList>
+          </CommandGroup>
+          <CommandGroup heading="Customers">
+            {customers.data?.map((c) => (
+              <CommandItem
+                key={c.id}
+                value={`${c.name} #${c.id}`}
+                onSelect={() => go(`/customers?id=${c.id}`)}
+              >
+                <span className="w-10 num text-xs text-ink-faint">#{c.id}</span>
+                {c.name}
+                <span className="ml-auto text-xs text-ink-faint">
+                  {SEGMENT_LABEL[c.segment]}, {zoneLabel(c.timezone)}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
     </CommandDialog>
   )
 }

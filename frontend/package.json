@@ -11,7 +11,8 @@
     "typecheck": "tsc -b --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "screenshots": "node scripts/screenshots.mjs --light"
+    "screenshots": "node scripts/screenshots.mjs --light",
+    "qa": "node scripts/qa.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -32,6 +33,7 @@
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",

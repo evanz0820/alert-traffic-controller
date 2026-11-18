@@ -83,13 +83,13 @@
   --rim-strong: rgb(15 26 46 / 0.16);
   --ink: #0b1220;
   --ink-muted: #4a5a73;
-  --ink-faint: #64738b;
+  --ink-faint: #56647b;
 
-  --sent: #0b7f76;
-  --delayed: #a35f00;
+  --sent: #08706a;
+  --delayed: #8a5000;
   --batched: #6d3fd9;
   --suppressed: #5b6b82;
-  --critical: #d42f2f;
+  --critical: #bf2424;
   --baseline: #8a97ab;
 
   --radius: 10px;
@@ -130,12 +130,12 @@
   --rim-strong: rgb(148 163 184 / 0.22);
   --ink: #e6edf7;
   --ink-muted: #9aabc4;
-  --ink-faint: #7587a3;
+  --ink-faint: #8798b2;
 
   --sent: #2dd4bf;
   --delayed: #f5b544;
   --batched: #a78bfa;
-  --suppressed: #7c8ba3;
+  --suppressed: #8b9ab1;
   --critical: #f87171;
   --baseline: #5d6d88;
 
