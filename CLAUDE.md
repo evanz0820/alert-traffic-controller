@@ -56,7 +56,8 @@ docs/PLAN.md      approved plan: data model, API contract, pipeline, wireframes
 | Seed DB + default runs | `make seed` |
 | All tests | `make test` |
 | Lint + format check + types | `make lint` |
-| Screenshots (Playwright) | `make screenshots` |
+| Screenshots (Playwright) | `make screenshots` (needs `make dev`) |
+| A11y + interaction QA | `make qa` (needs `make dev`; adds a run, so `make seed` after) |
 | Backend only | `cd backend && uv run pytest` / `uv run ruff check` / `uv run mypy` |
 | Frontend only | `cd frontend && npm run dev` / `npm run typecheck` / `npm run lint` |
 
@@ -72,3 +73,13 @@ docs/PLAN.md      approved plan: data model, API contract, pipeline, wireframes
   design tokens (CSS variables), never hex values in components.
 - Red is reserved for critical alerts in the UI.
 - Commit after each stage (conventional commit messages).
+
+## Gotchas
+- The repo may live in an iCloud-synced folder that marks `.venv` hidden, so Python skips
+  the editable-install `.pth`. The Makefile exports `PYTHONPATH=src`; do the same when
+  running backend commands by hand.
+- shadcn's generated components target React 19. On React 18, any component that Radix
+  passes a ref to (via `asChild` or a portal) must use `forwardRef` (see `button.tsx`,
+  `sheet.tsx`, `dialog.tsx`), and `CommandDialog` children must be wrapped in `<Command>`.
+- `with_overrides` deep-merges, but `PUT /config` and `rules.yaml` replace maps wholesale;
+  validators therefore require complete maps.

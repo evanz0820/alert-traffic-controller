@@ -70,6 +70,26 @@ for (const theme of themes) {
   }
 }
 
+// Live Tower in motion (reduced motion is off here): a three-frame sequence for the README.
+if (!only?.length || only.includes('tower')) {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 2,
+  })
+  await context.addInitScript(() => localStorage.setItem('atc-theme', 'dark'))
+  const page = await context.newPage()
+  await page.goto(`${BASE}/tower`, { waitUntil: 'networkidle' })
+  const stage = page.getByRole('region', { name: 'Replay' })
+  await page.getByRole('slider', { name: 'Replay speed' }).focus()
+  await page.keyboard.press('ArrowRight') // 6 hr/s so the frames span several days
+  for (const [i, wait] of [2500, 3500, 4500].entries()) {
+    await page.waitForTimeout(wait)
+    await stage.screenshot({ path: resolve(out, `tower-frame-${i + 1}.png`) })
+    console.log(`✓ tower-frame-${i + 1}.png`)
+  }
+  await context.close()
+}
+
 await browser.close()
 if (problems.length) {
   console.error(`\n${problems.length} screenshot(s) had problems.`)
