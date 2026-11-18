@@ -45,22 +45,22 @@ DIURNAL_WEIGHTS: tuple[float, ...] = (
 
 # Expected events per customer per day.
 TXN_RATE: dict[Segment, float] = {
-    Segment.MASS: 0.35,
-    Segment.MASS_AFFLUENT: 0.50,
-    Segment.SENIOR: 0.20,
+    Segment.MASS: 0.25,
+    Segment.MASS_AFFLUENT: 0.40,
+    Segment.SENIOR: 0.15,
 }
 LOW_BALANCE_RATE: dict[Segment, float] = {
     Segment.MASS: 0.08,
     Segment.MASS_AFFLUENT: 0.02,
     Segment.SENIOR: 0.04,
 }
-AD_HOC_DEPOSIT_RATE = 0.20
+AD_HOC_DEPOSIT_RATE = 0.50  # incoming transfers, refunds, cashback credits
 INTERNATIONAL_RATE = 0.02
 FRAUD_RATE = 0.004
 CARD_LOCK_RATE = 0.0015
 NEW_DEVICE_RATE = 0.006
 CREDIT_LIMIT_RATE_PER_CARD = 0.003
-MARKETING_DRIP_RATE = 0.03
+MARKETING_DRIP_RATE = 0.05
 
 FRAUD_TRIGGERS_LOCK = 0.5
 BURST_PROBABILITY = 0.04
@@ -80,12 +80,17 @@ class Campaign:
 
 
 CAMPAIGNS: tuple[Campaign, ...] = (
-    Campaign("holiday-cashback", 2, time(10, 0), 0.75),
-    Campaign("cashback-reminder", 4, time(18, 0), 0.50),
-    Campaign("travel-card-upgrade", 11, time(21, 30), 0.65),
-    Campaign("savings-rate-promo", 18, time(8, 0), 0.70),
-    Campaign("early-black-friday", 25, time(6, 0), 0.80),
-    Campaign("black-friday-encore", 27, time(12, 0), 0.60),
+    Campaign("holiday-cashback", 1, time(10, 0), 0.75),
+    Campaign("cashback-reminder", 3, time(18, 0), 0.60),
+    Campaign("card-upgrade", 6, time(12, 30), 0.65),
+    Campaign("travel-card-upgrade", 9, time(21, 30), 0.65),
+    Campaign("refer-a-friend", 12, time(9, 0), 0.70),
+    Campaign("savings-rate-promo", 15, time(8, 0), 0.70),
+    Campaign("savings-rate-reminder", 17, time(19, 0), 0.55),
+    Campaign("auto-loan-offer", 20, time(11, 0), 0.60),
+    Campaign("early-black-friday", 24, time(6, 0), 0.80),
+    Campaign("black-friday-encore", 26, time(12, 0), 0.70),
+    Campaign("cyber-week-cashback", 28, time(10, 30), 0.70),
 )
 
 _EASTERN = ZoneInfo("America/New_York")

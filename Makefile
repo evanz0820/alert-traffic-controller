@@ -33,7 +33,7 @@ seed: ## Generate synthetic data (seed 42) and the default baseline + ATC runs
 test: test-backend test-frontend ## Run all tests
 
 test-backend: ## Backend tests with coverage on the rules engine
-	cd $(BACKEND) && uv run pytest --cov=atc --cov-report=term-missing
+	cd $(BACKEND) && uv run pytest --cov=atc --cov-report=term-missing && uv run coverage report --include='src/atc/engine/*' --fail-under=90
 
 test-frontend: ## Frontend type check
 	cd $(FRONTEND) && npm run typecheck

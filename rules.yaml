@@ -1,1 +1,62 @@
-# Rules configuration. Populated in Stage 3.
+# ATC rules configuration. Edited by hand or from the dashboard (PUT /config).
+# critical_bypass is always first and cannot be disabled.
+pipeline:
+- critical_bypass
+- dedup
+- preference_filter
+- fatigue_gate
+- quiet_hours
+- frequency_cap
+- digest
+- channel_routing
+rules:
+  critical_bypass:
+    latency_seconds:
+      sms: 0.9
+      push: 1.2
+      email: 2.8
+  dedup:
+    enabled: true
+  preference_filter:
+    enabled: true
+    fallback_order:
+    - push
+    - email
+    - sms
+  fatigue_gate:
+    enabled: true
+    threshold: 60.0
+    window_days: 7
+    saturation: 18.0
+    weights:
+      critical: 0.0
+      high: 1.0
+      low: 0.6
+      marketing: 1.5
+    night_multiplier: 1.5
+  quiet_hours:
+    enabled: true
+    start: '22:00'
+    end: 07:00
+    high_amount_exemption: 2500.0
+  frequency_cap:
+    enabled: true
+    daily_cap: 5
+    hourly_cap: 2
+    marketing_daily_cap: 1
+    marketing_weekly_cap: 2
+  digest:
+    enabled: true
+    send_at: '18:00'
+    event_types:
+    - deposit
+    - payment_received
+    - statement_ready
+    - credit_limit_change
+  channel_routing:
+    enabled: true
+    push_open_window_minutes: 30
+    open_probability:
+      high: 0.75
+      medium: 0.5
+      low: 0.25
