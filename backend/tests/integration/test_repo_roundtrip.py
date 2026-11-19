@@ -4,13 +4,13 @@ from sqlmodel import Session, select
 
 from atc.db.models import ServicePhone
 from atc.db.repo import load_accounts, load_customers, load_events, reset_schema, write_dataset
-from atc.db.session import make_engine
+from atc.db.session import make_writable_engine
 from atc.directory.phones import SERVICE_PHONES
 from atc.simulator.models import Dataset
 
 
 def test_dataset_round_trips_through_sqlite(tmp_path: Path, dataset: Dataset) -> None:
-    engine = make_engine(f"sqlite:///{tmp_path / 'atc.db'}")
+    engine = make_writable_engine(tmp_path / "atc.db")
     reset_schema(engine)
     with Session(engine) as session:
         write_dataset(session, dataset)

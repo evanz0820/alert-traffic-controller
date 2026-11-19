@@ -27,15 +27,21 @@ delivery, stop and ask.
 
 ## Folder map
 ```
+api/index.py      Vercel Python function: exposes the FastAPI app for /api/*
+vercel.json       Vercel build, static output, function bundle, rewrites
+requirements.txt  runtime deps for the Vercel function (keep in sync with backend/pyproject)
 backend/
+  data/atc.db     committed read-only snapshot (dataset + baseline + default run)
   src/atc/
     engine/       pure rules pipeline (no I/O, no DB, mypy strict)
       rules/      one module per rule, shared Rule protocol
     simulator/    synthetic customers, accounts, events (seeded)
     directory/    account type -> customer service phone mapping
     db/           SQLModel tables, session, repositories
-    analytics/    summary, flows (Sankey), timeseries, timelines
-    api/          FastAPI app + routers + response schemas
+    analytics/    summary, flows (Sankey), timeseries, timelines (from in-memory rows)
+    api/          FastAPI app + routers, all under /api
+    snapshot.py   build-time: writes backend/data/atc.db (`make seed`)
+    simulation.py runtime: POST /simulate, computed in memory, never stored
     config.py     loads/validates rules.yaml
   tests/          unit/, property/, integration/
 frontend/
@@ -53,15 +59,18 @@ docs/PLAN.md      approved plan: data model, API contract, pipeline, wireframes
 |---|---|
 | Install everything | `make setup` |
 | Run API + web | `make dev` (API :8000, web :5173, docs at :8000/docs) |
-| Seed DB + default runs | `make seed` |
+| Rebuild read-only snapshot | `make seed` (writes `backend/data/atc.db`; commit it) |
 | All tests | `make test` |
 | Lint + format check + types | `make lint` |
 | Screenshots (Playwright) | `make screenshots` (needs `make dev`) |
-| A11y + interaction QA | `make qa` (needs `make dev`; adds a run, so `make seed` after) |
+| A11y + interaction QA | `make qa` (needs `make dev`) |
 | Backend only | `cd backend && uv run pytest` / `uv run ruff check` / `uv run mypy` |
 | Frontend only | `cd frontend && npm run dev` / `npm run typecheck` / `npm run lint` |
 
 ## Conventions
+- The deployed app is read-only: never write to disk at runtime. Stored runs come from the
+  snapshot; simulations are returned, not saved. Rebuild and commit the snapshot after
+  changing the engine, simulator or rules.yaml (a test fails if it is stale).
 - Engine rules are pure: `apply(request, decision, ctx) -> decision`. No clocks, no
   randomness, no DB inside `atc.engine`. Time and state come in through arguments.
 - All times stored in UTC (`datetime` with tz). Convert to the customer's zone only

@@ -1,8 +1,5 @@
-import { ErrorState } from '@/components/shared/ErrorState'
 import { Panel } from '@/components/shared/Panel'
-import { Skeleton } from '@/components/ui/skeleton'
 import { fmtInt } from '@/lib/format'
-import { useRunSummary } from '@/lib/queries'
 import type { Summary } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -46,33 +43,20 @@ const ROWS: {
   { label: 'Daily digests', get: (s) => s.digests, format: fmtInt, better: 'fixed' },
 ]
 
-export function RunComparison({
-  previousId,
-  currentId,
-}: {
-  previousId?: string
-  currentId?: string
-}) {
-  const previous = useRunSummary(previousId)
-  const current = useRunSummary(currentId)
-
+export function RunComparison({ previous, current }: { previous?: Summary; current?: Summary }) {
   return (
     <Panel
       title="This run against the one before"
       description={
-        previousId && previous.data && current.data
-          ? `${previous.data.label ?? 'Previous run'} on the left, ${current.data.label ?? 'current run'} on the right.`
+        previous && current
+          ? `${previous.label ?? 'Previous run'} on the left, ${current.label ?? 'current run'} on the right.`
           : 'Run a simulation to compare it with the current one.'
       }
     >
-      {!previousId ? (
+      {!previous || !current ? (
         <p className="text-sm text-ink-muted">
-          There's only one run so far. Change a rule and run the simulation to see the difference.
+          Change a rule and run the simulation to compare it with the default rules.
         </p>
-      ) : previous.isError || current.isError ? (
-        <ErrorState error={previous.error ?? current.error} />
-      ) : !previous.data || !current.data ? (
-        <Skeleton className="h-64 w-full" />
       ) : (
         <table className="w-full text-sm">
           <caption className="sr-only">Previous run compared with the current run</caption>
@@ -94,8 +78,8 @@ export function RunComparison({
           </thead>
           <tbody className="divide-y divide-rim">
             {ROWS.map((row) => {
-              const a = row.get(previous.data)
-              const b = row.get(current.data)
+              const a = row.get(previous)
+              const b = row.get(current)
               const diff = b - a
               const good =
                 row.better === 'lower' ? diff < 0 : row.better === 'higher' ? diff > 0 : false

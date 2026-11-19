@@ -1,6 +1,6 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, LoaderCircle, Play, RotateCcw, Save } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { LoaderCircle, Play, RotateCcw } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { CountUp } from '@/components/shared/CountUp'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -10,7 +10,7 @@ import { api } from '@/lib/api'
 import { fmtInt } from '@/lib/format'
 import { useRuns, useSummary } from '@/lib/queries'
 import { useRun } from '@/lib/run-context'
-import type { RuleKey, RulesConfig } from '@/lib/types'
+import type { RuleKey, RulesConfig, RunInfo, Summary } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { RULE_INFO } from './ruleInfo'
 import { RuleStrip, SliderField } from './RuleStrip'
@@ -86,23 +86,31 @@ const asPct1 = (n: number) => `${n.toFixed(1)}%`
 const asPct0 = (n: number) => `${n.toFixed(0)}%`
 const asDec1 = (n: number) => n.toFixed(1)
 
+interface LabRun {
+  run: RunInfo
+  summary: Summary
+}
+
 export default function RulesLabPage() {
-  const queryClient = useQueryClient()
-  const { runId, setRunId } = useRun()
+  const { runId } = useRun()
   const runs = useRuns()
-  const summary = useSummary()
-  const base = useMemo(() => runs.data?.find((r) => r.id === runId)?.config, [runs.data, runId])
+  const stored = useSummary()
+  const storedRun = runs.data?.find((r) => r.id === runId)
 
-  // Edits belong to the run they were made against; switching runs starts from that run's config.
-  const [edits, setEdits] = useState<{ runId: string; config: RulesConfig } | null>(null)
-  const [explicitPrevious, setPreviousId] = useState<string>()
-  const [saved, setSaved] = useState(false)
+  // Simulations run on the server in memory and aren't stored, so this session keeps them.
+  const [history, setHistory] = useState<LabRun[]>([])
+  const storedLab = storedRun && stored.data ? { run: storedRun, summary: stored.data } : undefined
+  const current = history.at(-1) ?? storedLab
+  const previous =
+    history.length >= 2 ? history.at(-2) : history.length === 1 ? storedLab : undefined
+  const base = current?.run.config
 
-  const draft = edits && edits.runId === runId ? edits.config : (base ?? null)
+  // Edits belong to the run they were made against.
+  const [edits, setEdits] = useState<{ baseId: string; config: RulesConfig } | null>(null)
+  const draft = edits && edits.baseId === current?.run.id ? edits.config : (base ?? null)
   const setDraft = (update: (d: RulesConfig) => RulesConfig) => {
-    if (runId && draft) setEdits({ runId, config: update(draft) })
+    if (current && draft) setEdits({ baseId: current.run.id, config: update(draft) })
   }
-  const previousId = explicitPrevious ?? runs.data?.find((r) => r.id !== runId)?.id
 
   const changes = base && draft ? describeChanges(base, draft) : []
   const dirty = changes.length > 0
@@ -110,33 +118,23 @@ export default function RulesLabPage() {
   const simulate = useMutation({
     mutationFn: (config: RulesConfig) =>
       api.simulate(config, changes.length ? changes.slice(0, 3).join(', ') : 'Rerun'),
-    onSuccess: async (result) => {
-      setPreviousId(runId)
-      await queryClient.invalidateQueries({ queryKey: ['runs'] })
-      setRunId(result.run_id)
-    },
-  })
-
-  const save = useMutation({
-    mutationFn: (config: RulesConfig) => api.saveConfig(config),
-    onSuccess: () => {
-      setSaved(true)
-      queryClient.invalidateQueries({ queryKey: ['config'] })
-      setTimeout(() => setSaved(false), 2500)
+    onSuccess: (result) => {
+      setHistory((h) => [...h, { run: result.run, summary: result.summary }])
+      setEdits(null)
     },
   })
 
   if (runs.isError) return <ErrorState error={runs.error} onRetry={() => runs.refetch()} />
-  if (summary.isError) return <ErrorState error={summary.error} onRetry={() => summary.refetch()} />
-  if (runs.data && runId && !base) {
+  if (stored.isError) return <ErrorState error={stored.error} onRetry={() => stored.refetch()} />
+  if (runs.data && runId && !storedRun) {
     return (
       <ErrorState
         title="The selected run is no longer available."
-        error={new Error('Pick another run from the sidebar')}
+        error={new Error('Reload the page to pick up the current snapshot')}
       />
     )
   }
-  if (!draft || !summary.data) {
+  if (!draft || !current) {
     return (
       <div aria-busy="true" aria-label="Loading rules">
         <Skeleton className="h-9 w-48" />
@@ -151,7 +149,7 @@ export default function RulesLabPage() {
   }
 
   const rules = draft.rules
-  const s = summary.data
+  const s = current.summary
   const set = <K extends keyof Rules>(key: K, patch: Partial<Rules[K]>) =>
     setDraft((d) => ({ ...d, rules: { ...d.rules, [key]: { ...d.rules[key], ...patch } } }))
   const acted = (key: RuleKey) => s.by_rule[key] ?? 0
@@ -383,16 +381,16 @@ export default function RulesLabPage() {
         </ol>
 
         <aside className="space-y-6 xl:sticky xl:top-10 xl:self-start">
-          <RunComparison previousId={previousId} currentId={runId} />
+          <RunComparison previous={previous?.summary} current={current.summary} />
           <div className="rounded-2xl border border-rim bg-deck p-5 text-sm">
             <p className="text-ink">
               {dirty ? (
                 <>
-                  <span className="num">{changes.length}</span> unsaved change
-                  {changes.length === 1 ? '' : 's'}: {changes.join(', ')}.
+                  <span className="num">{changes.length}</span> change
+                  {changes.length === 1 ? '' : 's'} not yet run: {changes.join(', ')}.
                 </>
               ) : (
-                'These settings match the selected run.'
+                'These settings match the run shown above.'
               )}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -400,20 +398,22 @@ export default function RulesLabPage() {
               <Button variant="outline" onClick={() => setEdits(null)} disabled={!dirty}>
                 <RotateCcw /> Revert
               </Button>
-              <Button variant="ghost" onClick={() => save.mutate(draft)} disabled={save.isPending}>
-                {saved ? <Check /> : <Save />}
-                {saved ? 'Saved' : 'Save as default'}
-              </Button>
+              {history.length > 0 && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setHistory([])
+                    setEdits(null)
+                  }}
+                >
+                  Back to default rules
+                </Button>
+              )}
             </div>
-            {save.isError ? (
-              <p role="alert" className="mt-3 text-xs text-delayed">
-                Not saved: {(save.error as Error).message}
-              </p>
-            ) : (
-              <p className="mt-3 text-xs text-ink-faint">
-                Saving writes these settings to rules.yaml, so new runs start from them.
-              </p>
-            )}
+            <p className="mt-3 text-xs text-ink-faint">
+              Simulations run on demand and aren't saved. The other pages always show the default
+              rules; to change those defaults, edit rules.yaml and rebuild the snapshot.
+            </p>
           </div>
         </aside>
       </div>

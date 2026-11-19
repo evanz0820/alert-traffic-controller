@@ -53,7 +53,7 @@ A canvas replay of all 30 days. Each dot is one alert request entering the contr
 
 - **Overview:** headline KPIs, a Sankey of event type → deciding rule → outcome, and daily volume before and after.
 - **Live Tower:** the replay above, with play, pause, speed and scrub controls and a ticker of decisions.
-- **Rules Lab:** toggle and tune every rule, rerun the simulation (~1 s), and compare against the previous run.
+- **Rules Lab:** toggle and tune every rule, rerun the full 30-day simulation in memory (~0.5 s), and compare against the previous run.
 - **Customers:** search with ⌘K. Each customer gets a side-by-side timeline of what they'd get today versus with ATC, every decision explained in plain English, and the correct service phone number for each account, including cobrand partner lines.
 - **Alert Log:** every decision, filterable, with CSV export.
 
@@ -68,14 +68,21 @@ Dark by default with a light mode, responsive down to 390 px, and WCAG 2.1 AA (a
 
 ```mermaid
 flowchart LR
-    SIM[Simulator<br/>500 customers · 30 days · seed 42] --> ES[Event stream<br/>retries · bursts · 3 AM batches]
-    ES --> BASE[Baseline pass<br/>send everything]
-    ES --> PIPE[Rules pipeline<br/>8 pure rules, critical first]
-    BASE --> LOG[(Decision log<br/>SQLite)]
-    PIPE --> LOG
-    LOG --> API[FastAPI<br/>/docs]
-    API --> UI[React dashboard]
+    subgraph build["Build time (make seed)"]
+        SIM[Simulator<br/>500 customers · 30 days · seed 42] --> ES[Event stream<br/>retries · bursts · 3 AM batches]
+        ES --> BASE[Baseline pass<br/>send everything]
+        ES --> PIPE[Rules pipeline<br/>8 pure rules, critical first]
+        BASE --> SNAP[(Read-only snapshot<br/>backend/data/atc.db)]
+        PIPE --> SNAP
+    end
+    subgraph vercel["Vercel"]
+        SNAP --> API[FastAPI function<br/>/api]
+        API -- "POST /simulate<br/>rules run in memory" --> API
+        UI[React static site] --> API
+    end
 ```
+
+The deployed app never writes to disk. The dataset, baseline and default run are computed once at build time and committed as a read-only SQLite snapshot (a test fails if it drifts from the code). `POST /simulate` runs the same pure engine in memory against that snapshot and returns the summary, Sankey and daily series directly; nothing is saved.
 
 **Rule pipeline (in order):** critical bypass → deduplication → preference filter → fatigue gate → quiet hours → frequency cap → digest batching → channel routing. Every rule is a pure class behind one `Rule` protocol, configured from [`rules.yaml`](rules.yaml) and editable from the dashboard.
 
@@ -96,7 +103,8 @@ flowchart LR
 
 ## Design decisions and tradeoffs
 
-- **SQLite, not a server database.** One file, zero setup, `make setup && make dev` on a fresh clone. The workload is one writer per simulation and read-heavy analytics over ~45k rows. Postgres would add operations work and buy nothing here.
+- **SQLite, not a server database.** One file, zero setup, `make setup && make dev` on a fresh clone. The workload is read-heavy analytics over ~45k rows. Postgres would add operations work and buy nothing here.
+- **Read-only deployment.** Serverless functions have no durable disk, so instead of adding a database service, everything stored is precomputed into an immutable snapshot and every what-if is computed on request. The trade-off: simulations live only in the browser session (the Rules Lab keeps them for comparison) rather than becoming shareable runs.
 - **A heuristic fatigue score, not ML.** `score = 100 × weighted alerts in the last 7 days ÷ 18`, with critical weighted 0 and overnight deliveries ×1.5. It's explainable to a customer, an auditor or a product review, needs no training data, and is easy to tune from the dashboard. A model predicting opt-outs is the natural next step, behind the same rule interface.
 - **Rule order is a product decision.** Dedup runs before caps so retries don't eat a customer's budget. The fatigue gate runs before the frequency cap so a tired customer's marketing never spends cap headroom (moved up from the original spec order for this reason). Quiet hours run before caps so held alerts count on the morning they land. Routing runs last, once an alert is definitely going out.
 - **Critical retries are sent, not deduplicated.** Dedup could hide a genuine second fraud event, so ATC accepts the occasional duplicate fraud SMS. Safety beats tidiness.
@@ -110,8 +118,8 @@ Prerequisites: [uv](https://docs.astral.sh/uv/) and Node 22+.
 ```bash
 git clone https://github.com/evanz0820/alert-traffic-controller.git
 cd alert-traffic-controller
-make setup   # installs backend + frontend deps, seeds the database (~2 s)
-make dev     # API on :8000 (docs at /docs), dashboard on http://localhost:5173
+make setup   # installs backend + frontend deps and rebuilds the snapshot (~2 s)
+make dev     # API on :8000 (docs at /api/docs), dashboard on http://localhost:5173
 ```
 
 Or, optionally, with Docker: `docker compose up --build`.
@@ -120,14 +128,39 @@ Or, optionally, with Docker: `docker compose up --build`.
 |---|---|
 | `make test` | Backend tests with coverage (engine must stay ≥ 90%) and frontend type check |
 | `make lint` | ruff, ruff format, mypy (strict on the engine), ESLint, Prettier, tsc |
-| `make seed` | Rebuild the synthetic dataset and default runs |
+| `make seed` | Rebuild the read-only snapshot `backend/data/atc.db` (commit it afterwards) |
 | `make screenshots` | Every page at 1440 px and 390 px, dark and light; fails on console errors or horizontal overflow |
 | `make qa` | axe WCAG 2.1 AA audit of every page plus interaction checks |
+| `vercel deploy --prod` | Deploy (see below) |
+
+## Deploy to Vercel
+
+The repo deploys as one Vercel project: the React app as static files from `frontend/dist`, and FastAPI as a Python function (`api/index.py`) for everything under `/api`. [`vercel.json`](vercel.json) holds the build settings, function bundle and rewrites; `requirements.txt` lists the function's runtime dependencies; `.python-version` pins Python 3.12.
+
+**Option A, from the dashboard (recommended):**
+
+1. Push the repo to GitHub (the snapshot `backend/data/atc.db` must be committed).
+2. In Vercel, choose **Add New → Project** and import the repository.
+3. Leave **Root Directory** as the repo root and **Framework Preset** as *Other*. Build, install and output settings come from `vercel.json`, so don't override them.
+4. Click **Deploy**. Every later push to `main` redeploys automatically.
+
+**Option B, from the CLI:**
+
+```bash
+npm i -g vercel        # or use: npx vercel
+vercel login
+vercel link            # create or link the project; accept the repo root as the directory
+vercel deploy --prod
+```
+
+**Check the deployment:** open `/` (dashboard), `/api/health` (`{"status":"ok"}`), `/api/docs` (OpenAPI), and run a simulation in the Rules Lab.
+
+After changing the engine, the simulator or `rules.yaml`, run `make seed`, commit `backend/data/atc.db`, and push; the snapshot test in CI catches a stale file.
 
 ## Testing
 
-- **242 backend tests**: unit tests for every rule, the simulator, the phone directory and the alert copy; API integration tests on an isolated database; and Hypothesis property tests.
-- **Coverage:** 100% on the rules engine package (`atc.engine`), 98% overall. CI fails if the engine drops below 90%.
+- **247 backend tests**: unit tests for every rule, the simulator, the phone directory and the alert copy; API integration tests against a freshly built read-only snapshot; a check that the committed snapshot matches the code; and Hypothesis property tests.
+- **Coverage:** 100% on the rules engine package (`atc.engine`), 99% overall. CI fails if the engine drops below 90%.
 - **Property tests:** critical requested == sent and never delayed, for any stream and any valid config. Dedup is idempotent, and retries never change the original alert's fate. Non-critical alerts and digests never use a disabled channel.
 - **Time zones:** quiet hours across 7 US zones, the Nov 1 fall-back night (25 hours long), the ambiguous 1 AM hour, spring-forward, and Phoenix (no DST).
 - **Cobrand mapping:** every account type and partner resolves to its own line; a cobrand alert never shows the bank's number.
@@ -149,4 +182,4 @@ Python 3.12 · FastAPI · Pydantic v2 · SQLModel/SQLite · pytest + Hypothesis 
 
 ---
 
-*All data is synthetic. Northgate Bank is fictional; cobrand partner names are illustrative and every phone number uses the fictional 555-01xx range. No real alerts are sent, and the API has no authentication, so run it on localhost only.*
+*All data is synthetic. Northgate Bank is fictional; cobrand partner names are illustrative and every phone number uses the fictional 555-01xx range. No real alerts are sent. The API has no authentication, but it is read-only: it serves a precomputed snapshot and computes simulations without storing anything.*

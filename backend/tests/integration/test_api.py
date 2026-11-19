@@ -11,6 +11,7 @@ def test_runs_list_has_default_run(client: TestClient, run_id: str) -> None:
     runs = client.get("/runs").json()
     run = next(r for r in runs if r["id"] == run_id)
     assert run["kind"] == "atc"
+    assert run["label"] == "Default rules"
     assert run["headline"]["critical_rate"] == 100.0
     assert run["config"]["pipeline"][0] == "critical_bypass"
 
@@ -156,35 +157,49 @@ def test_not_found_and_bad_requests(client: TestClient, run_id: str) -> None:
     assert client.get(f"/runs/{run_id}/alerts", params={"page_size": 999}).status_code == 422
 
 
-def test_config_round_trip(client: TestClient) -> None:
+def test_config_is_read_only(client: TestClient) -> None:
     config = client.get("/config").json()
     assert config["pipeline"][0] == "critical_bypass"
-    config["rules"]["frequency_cap"]["daily_cap"] = 7
-    saved = client.put("/config", json=config)
-    assert saved.status_code == 200
-    assert client.get("/config").json()["rules"]["frequency_cap"]["daily_cap"] == 7
+    assert client.put("/config", json=config).status_code == 405
 
 
-def test_config_rejects_unsafe_changes(client: TestClient) -> None:
-    config = client.get("/config").json()
-    moved = {**config, "pipeline": [*config["pipeline"][1:], "critical_bypass"]}
-    assert client.put("/config", json=moved).status_code == 422
-    disabled = {**config}
-    disabled["rules"] = {**config["rules"], "critical_bypass": {"enabled": False}}
-    assert client.put("/config", json=disabled).status_code == 422
+def test_runs_are_read_only_snapshot(client: TestClient) -> None:
+    runs = client.get("/runs").json()
+    assert [r["id"] for r in runs] == ["default"]
 
 
-def test_simulate_with_overrides(client: TestClient) -> None:
+def test_simulate_returns_results_without_storing(client: TestClient) -> None:
     response = client.post(
         "/simulate",
         json={"overrides": {"rules": {"digest": {"enabled": False}}}, "label": "no digest"},
     )
-    assert response.status_code == 201
-    new_id = response.json()["run_id"]
-    summary = client.get(f"/runs/{new_id}/summary").json()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["run"]["id"].startswith("sim-")
+    assert body["run"]["config"]["rules"]["digest"]["enabled"] is False
+    summary = body["summary"]
     assert summary["digests"] == 0
     assert summary["label"] == "no digest"
     assert summary["critical"]["rate"] == 100.0
+    assert len(body["timeseries"]) >= 30
+    stage1 = sum(
+        link["value"]
+        for link in body["flows"]["links"]
+        if body["flows"]["nodes"][link["source"]]["kind"] == "event"
+    )
+    assert stage1 == summary["requested"]
+    # Nothing was persisted: the run list and the run's summary endpoint don't know it.
+    assert [r["id"] for r in client.get("/runs").json()] == ["default"]
+    assert client.get(f"/runs/{body['run']['id']}/summary").status_code == 404
+
+
+def test_simulate_with_default_config_reproduces_the_snapshot(
+    client: TestClient, run_id: str
+) -> None:
+    stored = client.get(f"/runs/{run_id}/summary").json()
+    fresh = client.post("/simulate", json={}).json()["summary"]
+    for key in ("requested", "delivered", "critical", "outcomes", "by_rule", "avg_fatigue"):
+        assert fresh[key] == stored[key], key
 
 
 def test_simulate_aggressive_config_never_touches_critical(client: TestClient) -> None:
@@ -195,8 +210,7 @@ def test_simulate_aggressive_config_never_touches_critical(client: TestClient) -
             "fatigue_gate": {"threshold": 0},
         }
     }
-    new_id = client.post("/simulate", json={"overrides": overrides}).json()["run_id"]
-    critical = client.get(f"/runs/{new_id}/summary").json()["critical"]
+    critical = client.post("/simulate", json={"overrides": overrides}).json()["summary"]["critical"]
     assert critical["delivered"] == critical["requested"]
     assert critical["delayed"] == critical["suppressed"] == 0
 
@@ -209,5 +223,5 @@ def test_simulate_rejects_invalid_overrides(client: TestClient) -> None:
 def test_openapi_docs_available(client: TestClient) -> None:
     assert client.get("/docs").status_code == 200
     paths = client.get("/openapi.json").json()["paths"]
-    for path in ("/simulate", "/runs/{run_id}/summary", "/customers/{customer_id}/timeline"):
-        assert path in paths
+    for path in ("/api/simulate", "/api/runs/{run_id}/summary", "/api/customers/{id}/timeline"):
+        assert path.replace("{id}", "{customer_id}") in paths

@@ -1,0 +1,6 @@
+# Runtime dependencies for the Vercel Python function (api/index.py).
+# Mirrors backend/pyproject.toml minus build/dev-only packages (uvicorn, faker).
+fastapi==0.164.0
+sqlmodel==0.0.50
+pydantic==2.14.3
+PyYAML==6.0.3

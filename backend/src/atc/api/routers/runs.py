@@ -30,9 +30,16 @@ def list_runs(session: SessionDep, limit: Annotated[int, Query(ge=1, le=50)] = 1
     return [RunInfo.model_validate(r, from_attributes=True) for r in runs]
 
 
+# The snapshot is immutable, so a stored run's summary never changes.
+_summaries: dict[str, Summary] = {}
+
+
 @router.get("/{run_id}/summary", response_model=Summary)
 def run_summary(run_id: str, session: SessionDep) -> Summary:
-    return compute_summary(session, get_atc_run(session, run_id))
+    run = get_atc_run(session, run_id)
+    if run.id not in _summaries:
+        _summaries[run.id] = compute_summary(session, run)
+    return _summaries[run.id]
 
 
 @router.get("/{run_id}/flows", response_model=Flows)

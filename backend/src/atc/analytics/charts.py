@@ -1,12 +1,15 @@
 """Chart data: Sankey flows, daily volumes, and the compact Live Tower replay."""
 
+from collections import Counter
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select as sa_select
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, col
 
-from atc.db.models import AlertDecision, Digest, SimRun
+from atc.analytics.rows import Row, RunRows, load_run_rows
+from atc.db.models import AlertDecision, SimRun
 from atc.domain import EventType, Outcome
 from atc.schemas import DayPoint, FlowLink, FlowNode, Flows, Replay
 
@@ -47,26 +50,13 @@ OUTCOME_LABELS: dict[str, str] = {
 }
 
 
-def flows(session: Session, run_id: str) -> Flows:
+def build_flows(rows: Sequence[Row]) -> Flows:
     """event type -> deciding rule -> outcome, ordered for a readable Sankey."""
-    rows = session.exec(
-        select(
-            AlertDecision.event_type,
-            AlertDecision.decided_by_rule,
-            AlertDecision.outcome,
-            func.count(),
-        )
-        .where(col(AlertDecision.run_id) == run_id)
-        .group_by(
-            col(AlertDecision.event_type),
-            col(AlertDecision.decided_by_rule),
-            col(AlertDecision.outcome),
-        )
-    ).all()
+    counts = Counter((r.event_type, r.rule, r.outcome) for r in rows)
 
-    events = [e.value for e in EventType if any(r[0] == e.value for r in rows)]
-    rules = [k for k in RULE_LABELS if any(r[1] == k for r in rows)]
-    outcomes = [o for o in OUTCOME_LABELS if any(r[2] == o for r in rows)]
+    events = [e.value for e in EventType if any(k[0] == e.value for k in counts)]
+    rules = [k for k in RULE_LABELS if any(c[1] == k for c in counts)]
+    outcomes = [o for o in OUTCOME_LABELS if any(c[2] == o for c in counts)]
 
     nodes = (
         [FlowNode(name=EVENT_LABELS[e], kind="event", key=e) for e in events]
@@ -79,7 +69,7 @@ def flows(session: Session, run_id: str) -> Flows:
 
     first: dict[tuple[int, int], int] = {}
     second: dict[tuple[int, int], int] = {}
-    for event_type, rule, outcome, count in rows:
+    for (event_type, rule, outcome), count in counts.items():
         a = (index[("event", event_type)], index[("rule", rule)])
         b = (index[("rule", rule)], index[("outcome", outcome)])
         first[a] = first.get(a, 0) + count
@@ -88,16 +78,16 @@ def flows(session: Session, run_id: str) -> Flows:
     return Flows(nodes=nodes, links=links)
 
 
+def flows(session: Session, run_id: str) -> Flows:
+    return build_flows(load_run_rows(session, run_id).rows)
+
+
 def _bank_day(at: datetime) -> date:
     return at.astimezone(BANK_TZ).date()
 
 
-def timeseries(session: Session, run: SimRun) -> list[DayPoint]:
-    assert run.baseline_run_id is not None
-    base_times = session.exec(
-        select(AlertDecision.delivered_at).where(AlertDecision.run_id == run.baseline_run_id)
-    ).all()
-    delivered = [t for t in base_times if t is not None]
+def build_timeseries(base: RunRows, atc: RunRows) -> list[DayPoint]:
+    delivered = [r.delivered_at for r in base.rows if r.delivered_at is not None]
     if not delivered:
         return []
     # The dataset starts at midnight UTC, i.e. mid-evening Eastern; skip that partial day.
@@ -105,27 +95,32 @@ def timeseries(session: Session, run: SimRun) -> list[DayPoint]:
     days = sorted({d for t in delivered if (d := _bank_day(t)) >= first_full_day})
     span = [days[0] + timedelta(days=i) for i in range((days[-1] - days[0]).days + 1)]
     baseline = dict.fromkeys(span, 0)
-    atc = dict.fromkeys(span, 0)
+    atc_count = dict.fromkeys(span, 0)
     critical = dict.fromkeys(span, 0)
 
-    for t in base_times:
-        if t is not None and (d := _bank_day(t)) in baseline:
+    for t in delivered:
+        if (d := _bank_day(t)) in baseline:
             baseline[d] += 1
-    for t, priority in session.exec(
-        select(AlertDecision.delivered_at, AlertDecision.priority).where(
-            AlertDecision.run_id == run.id, col(AlertDecision.outcome).in_(DELIVERED)
-        )
-    ):
-        if t is not None and (d := _bank_day(t)) in atc:
-            atc[d] += 1
-            critical[d] += priority == "critical"
-    for t in session.exec(select(Digest.delivered_at).where(Digest.run_id == run.id)):
-        if (d := _bank_day(t)) in atc:
-            atc[d] += 1
+    for r in atc.rows:
+        if r.outcome not in DELIVERED or r.delivered_at is None:
+            continue
+        if (d := _bank_day(r.delivered_at)) in atc_count:
+            atc_count[d] += 1
+            critical[d] += r.priority == "critical"
+    for t in atc.digest_times:
+        if (d := _bank_day(t)) in atc_count:
+            atc_count[d] += 1
     return [
-        DayPoint(date=d.isoformat(), baseline=baseline[d], atc=atc[d], critical=critical[d])
+        DayPoint(date=d.isoformat(), baseline=baseline[d], atc=atc_count[d], critical=critical[d])
         for d in span
     ]
+
+
+def timeseries(session: Session, run: SimRun) -> list[DayPoint]:
+    assert run.baseline_run_id is not None
+    return build_timeseries(
+        load_run_rows(session, run.baseline_run_id), load_run_rows(session, run.id)
+    )
 
 
 PRIORITY_INDEX = {"marketing": 0, "low": 1, "high": 2, "critical": 3}

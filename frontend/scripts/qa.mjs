@@ -103,13 +103,12 @@ const badges = outcomes.filter((t) => t.includes('Suppressed')).length
 check(rows > 0 && badges === rows, `outcome filter shows only suppressed rows (${badges}/${rows})`)
 
 await page.goto(BASE + '/rules', { waitUntil: 'networkidle' })
-// Note: this persists a new run in the dev database; reseed (make seed) before screenshots.
 await page.getByRole('slider', { name: 'Alerts per day' }).focus()
 await page.keyboard.press('ArrowLeft')
 const simulated = page.waitForResponse((r) => r.url().includes('/simulate'))
 await page.getByRole('button', { name: 'Run simulation' }).first().click()
 const sim = await simulated
-check(sim.status() === 201, 'Run simulation creates a new run')
+check(sim.status() === 200, 'Run simulation returns results')
 // The panel goes old table -> skeleton -> new table, so poll rather than wait once.
 const comparison = page.locator('main aside table thead')
 let comparisonVisible = false

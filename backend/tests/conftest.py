@@ -2,9 +2,9 @@ import os
 import tempfile
 from pathlib import Path
 
-# Point the app at a throwaway database and rules file before any atc.db import.
+# Point the app at a throwaway snapshot and rules file before any atc.db import.
 _TMP = Path(tempfile.mkdtemp(prefix="atc-tests-"))
-os.environ["ATC_DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
+os.environ["ATC_DATABASE_PATH"] = str(_TMP / "test.db")
 os.environ["ATC_RULES_PATH"] = str(_TMP / "rules.yaml")
 
 import pytest

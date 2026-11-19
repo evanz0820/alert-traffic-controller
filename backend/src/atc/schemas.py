@@ -49,12 +49,6 @@ class SimulateRequest(BaseModel):
     label: str | None = Field(default=None, max_length=80)
 
 
-class SimulateResponse(BaseModel):
-    run_id: str
-    baseline_run_id: str
-    duration_ms: int
-
-
 class RunInfo(BaseModel):
     id: str
     kind: str
@@ -191,3 +185,12 @@ class Timeline(BaseModel):
     run_id: str
     baseline: list[TimelineItem]
     atc: list[TimelineItem]
+
+
+class SimulationResult(BaseModel):
+    """An on-demand run, computed in memory and returned whole; it is not stored."""
+
+    run: RunInfo
+    summary: Summary
+    flows: Flows
+    timeseries: list[DayPoint]

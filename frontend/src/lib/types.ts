@@ -221,3 +221,11 @@ export interface AlertFilters {
   date_from?: string
   date_to?: string
 }
+
+/** An on-demand run computed in memory by POST /simulate; it is not stored server-side. */
+export interface SimulationResult {
+  run: RunInfo
+  summary: Summary
+  flows: Flows
+  timeseries: DayPoint[]
+}

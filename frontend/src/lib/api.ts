@@ -8,6 +8,7 @@ import type {
   Replay,
   RulesConfig,
   RunInfo,
+  SimulationResult,
   Summary,
   Timeline,
 } from './types'
@@ -89,10 +90,9 @@ export const api = {
   timeline: (runId: string, id: number) =>
     request<Timeline>(`/customers/${id}/timeline?run=${runId}`),
   config: () => request<RulesConfig>('/config'),
-  saveConfig: (config: RulesConfig) =>
-    request<RulesConfig>('/config', { method: 'PUT', body: JSON.stringify(config) }),
+  /** Runs in memory on the server and returns the whole result; nothing is stored. */
   simulate: (overrides: Partial<RulesConfig>, label?: string) =>
-    request<{ run_id: string; baseline_run_id: string; duration_ms: number }>('/simulate', {
+    request<SimulationResult>('/simulate', {
       method: 'POST',
       body: JSON.stringify({ overrides, label }),
     }),

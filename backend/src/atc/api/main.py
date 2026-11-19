@@ -1,43 +1,38 @@
-"""FastAPI application entry point. OpenAPI docs are served at /docs."""
+"""FastAPI application. Every route lives under /api; OpenAPI docs are at /api/docs.
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+Locally `make dev` serves it with uvicorn; on Vercel `api/index.py` exposes the same app
+as a Python function.
+"""
 
-from fastapi import FastAPI
-from sqlmodel import Session, select
+from fastapi import APIRouter, FastAPI
 
 from atc.api.routers import config, customers, runs, simulate
-from atc.db.models import SimRun
-from atc.db.session import engine, init_db
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    init_db()
-    with Session(engine) as session:
-        if session.exec(select(SimRun).where(SimRun.kind == "atc")).first() is None:
-            from atc.seed import seed
-
-            seed(engine)
-    yield
-
 
 app = FastAPI(
     title="Alert Traffic Controller",
     description=(
         "A member-first alert gateway for the fictional Northgate Bank. Every alert passes "
         "through one controller that decides what to send, when, and on which channel. "
-        "Critical alerts are never suppressed or delayed. All data is synthetic."
+        "Critical alerts are never suppressed or delayed. All data is synthetic, and the "
+        "API is read-only: stored runs come from a prebuilt snapshot and simulations are "
+        "computed on demand."
     ),
-    version="0.1.0",
-    lifespan=lifespan,
+    version="0.2.0",
+    docs_url="/api/docs",
+    redoc_url=None,
+    openapi_url="/api/openapi.json",
 )
-app.include_router(simulate.router)
-app.include_router(runs.router)
-app.include_router(customers.router)
-app.include_router(config.router)
+
+api = APIRouter(prefix="/api")
+api.include_router(simulate.router)
+api.include_router(runs.router)
+api.include_router(customers.router)
+api.include_router(config.router)
 
 
-@app.get("/health", tags=["meta"])
+@api.get("/health", tags=["meta"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+app.include_router(api)

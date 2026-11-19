@@ -27,8 +27,8 @@ api: ## Run API only
 web: ## Run web only
 	cd $(FRONTEND) && npm run dev -- --port 5173
 
-seed: ## Generate synthetic data (seed 42) and the default baseline + ATC runs
-	cd $(BACKEND) && uv run python -m atc.seed
+seed: ## Build the read-only snapshot backend/data/atc.db (dataset, baseline, default run); restart `make dev` after
+	cd $(BACKEND) && uv run python -m atc.snapshot
 
 test: test-backend test-frontend ## Run all tests
 
@@ -49,7 +49,7 @@ format: ## Auto-format everything
 screenshots: ## Capture dashboard screenshots at 1440px and 390px (needs `make dev` running)
 	cd $(FRONTEND) && npm run screenshots
 
-qa: ## Accessibility (axe WCAG 2.1 AA) and interaction checks (needs `make dev` running; adds a run, so reseed after)
+qa: ## Accessibility (axe WCAG 2.1 AA) and interaction checks (needs `make dev` running)
 	cd $(FRONTEND) && npm run qa
 
 clean: ## Remove caches and the local database

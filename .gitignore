@@ -23,3 +23,6 @@ dist/
 .DS_Store
 .env
 .playwright-mcp/
+
+# The read-only snapshot the deployed API serves (rebuild with `make seed`).
+!backend/data/atc.db
