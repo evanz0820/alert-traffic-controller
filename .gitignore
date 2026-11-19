@@ -26,3 +26,5 @@ dist/
 
 # The read-only snapshot the deployed API serves (rebuild with `make seed`).
 !backend/data/atc.db
+.vercel
+.env*

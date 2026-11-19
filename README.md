@@ -2,6 +2,8 @@
 
 **One gateway between a bank's alert systems and its customers: fewer, better-timed alerts, and zero critical alerts ever held back.**
 
+**Live demo: [alert-traffic-controller.vercel.app](https://alert-traffic-controller.vercel.app)** · [API docs](https://alert-traffic-controller.vercel.app/api/docs)
+
 ![Overview in dark mode: ATC cut alert volume 24% while delivering 100% of 215 critical alerts](docs/screenshots/overview-desktop.png)
 
 Northgate Bank is fictional and every customer, account and alert here is synthetic (seed 42).
@@ -135,7 +137,7 @@ Or, optionally, with Docker: `docker compose up --build`.
 
 ## Deploy to Vercel
 
-The repo deploys as one Vercel project: the React app as static files from `frontend/dist`, and FastAPI as a Python function (`api/index.py`) for everything under `/api`. [`vercel.json`](vercel.json) holds the build settings, function bundle and rewrites; `requirements.txt` lists the function's runtime dependencies; `.python-version` pins Python 3.12.
+Live at **https://alert-traffic-controller.vercel.app**. The repo deploys as one Vercel project: the React app as static files from `frontend/dist`, and FastAPI as a Python function (`api/index.py`) for everything under `/api`. [`vercel.json`](vercel.json) holds the build settings, function bundle and rewrites; `requirements.txt` lists the function's runtime dependencies; `.python-version` pins Python 3.12.
 
 **Option A, from the dashboard (recommended):**
 
